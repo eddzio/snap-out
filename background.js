@@ -118,8 +118,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       chrome.tabs.sendMessage(tabId, { type: "SHOW_OVERLAY" }).catch(() => {});
       chrome.alarms.clear(alarm.name);
       delete activeTimes[tabId];
-      }
+    }
   });
+});
+
+// Open options page when extension icon is clicked
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
 });
 
 // Clean up when tab is closed
