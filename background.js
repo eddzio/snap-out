@@ -3,8 +3,7 @@ const DEFAULTS = {
   message: "Is this the best use of your time right now?",
   quickLinks: [
     { name: "Medium - My Stories", url: "https://medium.com/me/stories" }
-  ],
-  trackedSites: ["linkedin.com", "facebook.com"]
+  ]
 };
 
 // Track active time per site
@@ -38,7 +37,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!site) return;
 
     if (!activeTimes[tabId]) {
-      activeTimes[tabId] = { site, startTime: Date.now(), accumulated: 0, alarmStarted: false };
+      activeTimes[tabId] = { startTime: Date.now(), accumulated: 0, alarmStarted: false };
     } else if (!activeTimes[tabId].startTime) {
       // Resuming from idle — don't overwrite accumulated, just mark active again
       activeTimes[tabId].startTime = Date.now();
@@ -107,7 +106,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete activeTimes[tabId];
   chrome.alarms.clear(`check_${tabId}`);
-  resetIconForTab(tabId);
 });
 
 // Clean up when tab navigates away from tracked site

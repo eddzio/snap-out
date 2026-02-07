@@ -3,7 +3,7 @@
   "name": "Snap Out",
   "version": "1.0.0",
   "description": "Reminds you to stop scrolling LinkedIn and Facebook after a configurable time limit.",
-  "permissions": ["storage", "tabs", "alarms"],
+  "permissions": ["storage", "alarms"],
   "background": {
     "service_worker": "background.js"
   },
@@ -24,11 +24,5 @@
   "icons": {
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  },
-  "web_accessible_resources": [
-    {
-      "resources": ["overlay.html", "overlay.css"],
-      "matches": ["*://*.linkedin.com/*", "*://*.facebook.com/*"]
-    }
-  ]
+  }
 }
