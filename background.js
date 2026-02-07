@@ -9,6 +9,26 @@ const DEFAULTS = {
 // Track active time per site
 const activeTimes = {}; // { tabId: { site, startTime, accumulated } }
 
+// Track active ports from content scripts for navigation-away cleanup
+const activePorts = {}; // { tabId: port }
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "snap-out-heartbeat") return;
+
+  const tabId = port.sender?.tab?.id;
+  if (!tabId) return;
+
+  activePorts[tabId] = port;
+
+  port.onDisconnect.addListener(() => {
+    delete activePorts[tabId];
+    if (activeTimes[tabId]) {
+      delete activeTimes[tabId];
+      chrome.alarms.clear(`check_${tabId}`);
+    }
+  });
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(null, (data) => {
     if (!data.timeLimitMinutes) {
@@ -74,8 +94,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 function startCheckAlarm(tabId) {
   const alarmName = `check_${tabId}`;
-  // Check every 10 seconds (Chrome enforces 30s minimum, but this works in dev mode)
-  chrome.alarms.create(alarmName, { delayInMinutes: 10 / 60, periodInMinutes: 10 / 60 });
+  // Check every 30 seconds (Chrome's minimum alarm interval)
+  chrome.alarms.create(alarmName, { delayInMinutes: 0.5, periodInMinutes: 0.5 });
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -108,13 +128,3 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.alarms.clear(`check_${tabId}`);
 });
 
-// Clean up when tab navigates away from tracked site
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.url) {
-    const site = getSiteFromUrl(changeInfo.url);
-    if (!site && activeTimes[tabId]) {
-      delete activeTimes[tabId];
-      chrome.alarms.clear(`check_${tabId}`);
-      }
-  }
-});

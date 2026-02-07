@@ -1,3 +1,7 @@
+// Port to background — when this script is destroyed (navigation away),
+// the port disconnects and background cleans up the timer.
+const port = chrome.runtime.connect({ name: "snap-out-heartbeat" });
+
 let overlayInjected = false;
 let idleTimeout = null;
 let isIdle = true;
@@ -146,6 +150,12 @@ function showOverlay() {
     linksContainer.appendChild(linksLabel);
 
     config.quickLinks.forEach((link) => {
+      try {
+        const parsed = new URL(link.url);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return;
+      } catch {
+        return;
+      }
       const a = document.createElement("a");
       a.href = link.url;
       a.textContent = link.name;
@@ -220,11 +230,11 @@ function showOverlay() {
         letter-spacing: 0.5px;
         opacity: 0.6;
       }
-      .snap-out-link {
+      #snap-out-backdrop #snap-out-links .snap-out-link {
         display: inline-block;
         background: #f5f5f4;
-        color: #292524 !important;
-        text-decoration: none !important;
+        color: #292524;
+        text-decoration: none;
         padding: 10px 20px;
         border-radius: 8px;
         margin: 4px;
@@ -233,7 +243,7 @@ function showOverlay() {
         border: none;
         transition: all 0.2s;
       }
-      .snap-out-link:hover {
+      #snap-out-backdrop #snap-out-links .snap-out-link:hover {
         opacity: 0.85;
         transform: translateY(-1px);
       }

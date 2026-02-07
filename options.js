@@ -84,16 +84,42 @@ function addLinkRow(name = "", url = "") {
 
 addLinkBtn.addEventListener("click", () => addLinkRow());
 
+function isValidUrl(str) {
+  try {
+    const parsed = new URL(str);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 saveBtn.addEventListener("click", () => {
   const links = [];
+  let hasInvalidUrl = false;
   linksList.querySelectorAll(".link-row").forEach((row) => {
     const inputs = row.querySelectorAll("input");
     const name = inputs[0].value.trim();
     const url = inputs[1].value.trim();
     if (name && url) {
-      links.push({ name, url });
+      if (!isValidUrl(url)) {
+        hasInvalidUrl = true;
+        inputs[1].style.borderColor = "#ef4444";
+      } else {
+        inputs[1].style.borderColor = "";
+        links.push({ name, url });
+      }
     }
   });
+
+  if (hasInvalidUrl) {
+    toast.textContent = "Invalid URL: must start with http:// or https://";
+    toast.classList.add("show");
+    setTimeout(() => {
+      toast.classList.remove("show");
+      toast.textContent = "Settings saved!";
+    }, 3000);
+    return;
+  }
 
   chrome.storage.sync.set({
     timeLimitMinutes: selectedMinutes,
