@@ -1,14 +1,24 @@
 let overlayInjected = false;
 let idleTimeout = null;
+let isIdle = true;
 const IDLE_DELAY_MS = 15000; // 15 seconds of no interaction = idle
 
-// Notify background that page is active
+// Keep a persistent port to the background so the service worker stays alive for icon blinking
+const keepAlivePort = chrome.runtime.connect({ name: "keepalive" });
+
+// Notify background that page is active (only on idle → active transition)
 function notifyActive() {
-  chrome.runtime.sendMessage({ type: "PAGE_ACTIVE" });
+  if (isIdle) {
+    isIdle = false;
+    chrome.runtime.sendMessage({ type: "PAGE_ACTIVE" });
+  }
 }
 
 function notifyIdle() {
-  chrome.runtime.sendMessage({ type: "PAGE_IDLE" });
+  if (!isIdle) {
+    isIdle = true;
+    chrome.runtime.sendMessage({ type: "PAGE_IDLE" });
+  }
 }
 
 // Track user activity
@@ -82,7 +92,7 @@ function showOverlay() {
     });
 
     const dismissBtn = document.createElement("button");
-    dismissBtn.textContent = "5 more minutes...";
+    dismissBtn.textContent = "1 more minute...";
     dismissBtn.id = "snap-out-dismiss";
     dismissBtn.addEventListener("click", () => {
       backdrop.remove();
@@ -102,7 +112,7 @@ function showOverlay() {
       #snap-out-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.85);
+        background: #292524;
         z-index: 2147483647;
         display: flex;
         align-items: center;
@@ -115,23 +125,22 @@ function showOverlay() {
         to { opacity: 1; }
       }
       #snap-out-panel {
-        background: #1a1a2e;
-        border: 1px solid #333;
+        background: #292524;
+        border: 2px solid #f5f5f4;
         border-radius: 16px;
         padding: 40px;
         max-width: 440px;
         width: 90%;
         text-align: center;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
       }
       #snap-out-title {
-        color: #ff6b6b;
+        color: #f5f5f4;
         font-size: 28px;
         margin: 0 0 12px 0;
         font-weight: 700;
       }
       #snap-out-message {
-        color: #e0e0e0;
+        color: #f5f5f4;
         font-size: 18px;
         margin: 0 0 28px 0;
         line-height: 1.5;
@@ -140,44 +149,44 @@ function showOverlay() {
         margin-bottom: 24px;
       }
       #snap-out-links-label {
-        color: #888;
+        color: #f5f5f4;
         font-size: 13px;
         margin: 0 0 12px 0;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        opacity: 0.6;
       }
       .snap-out-link {
         display: inline-block;
-        background: #16213e;
-        color: #4fc3f7 !important;
+        background: #f5f5f4;
+        color: #292524 !important;
         text-decoration: none !important;
         padding: 10px 20px;
         border-radius: 8px;
         margin: 4px;
         font-size: 14px;
-        font-weight: 500;
-        border: 1px solid #2a3a5c;
+        font-weight: 600;
+        border: none;
         transition: all 0.2s;
       }
       .snap-out-link:hover {
-        background: #1a2744;
-        border-color: #4fc3f7;
+        opacity: 0.85;
         transform: translateY(-1px);
       }
       #snap-out-dismiss {
         background: transparent;
-        color: #666;
-        border: 1px solid #333;
+        color: #f5f5f4;
+        border: 1px solid #f5f5f4;
         padding: 10px 24px;
         border-radius: 8px;
         font-size: 14px;
         cursor: pointer;
         transition: all 0.2s;
         margin-top: 8px;
+        opacity: 0.4;
       }
       #snap-out-dismiss:hover {
-        color: #999;
-        border-color: #555;
+        opacity: 0.7;
       }
     `;
 

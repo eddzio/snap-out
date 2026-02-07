@@ -9,7 +9,55 @@ const DEFAULTS = {
 
 // Track active time per site
 const activeTimes = {}; // { tabId: { site, startTime, accumulated } }
-let alarmCallbacks = {};
+
+// Icon blinking
+const ICON_DEFAULT = { "48": "icons/icon48.png", "128": "icons/icon128.png" };
+const ICON_ACTIVE = { "48": "icons/icon-active-48.png", "128": "icons/icon-active-128.png" };
+let blinkInterval = null;
+let blinkOn = false;
+
+function startBlinking() {
+  if (blinkInterval) return;
+  blinkOn = false;
+  blinkInterval = setInterval(() => {
+    const trackedTabIds = Object.keys(activeTimes).map(Number);
+    if (trackedTabIds.length === 0) {
+      stopBlinking();
+      return;
+    }
+    blinkOn = !blinkOn;
+    const path = blinkOn ? ICON_ACTIVE : ICON_DEFAULT;
+    trackedTabIds.forEach((tabId) => {
+      chrome.action.setIcon({ tabId, path }).catch(() => {});
+    });
+  }, 1000);
+}
+
+function stopBlinking() {
+  if (blinkInterval) {
+    clearInterval(blinkInterval);
+    blinkInterval = null;
+  }
+  blinkOn = false;
+}
+
+function resetIconForTab(tabId) {
+  chrome.action.setIcon({ tabId, path: ICON_DEFAULT }).catch(() => {});
+  if (Object.keys(activeTimes).length === 0) {
+    stopBlinking();
+  }
+}
+
+// Keep service worker alive via port connections from content scripts
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === "keepalive") {
+    // If we already have tracked tabs, restart blinking (worker may have restarted)
+    if (Object.keys(activeTimes).length > 0 && !blinkInterval) {
+      startBlinking();
+    }
+    port.onDisconnect.addListener(() => {});
+  }
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(null, (data) => {
@@ -39,11 +87,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!site) return;
 
     if (!activeTimes[tabId]) {
-      activeTimes[tabId] = { site, startTime: Date.now(), accumulated: 0 };
-    } else {
+      activeTimes[tabId] = { site, startTime: Date.now(), accumulated: 0, alarmStarted: false };
+    } else if (!activeTimes[tabId].startTime) {
+      // Resuming from idle — don't overwrite accumulated, just mark active again
       activeTimes[tabId].startTime = Date.now();
     }
-    startCheckAlarm(tabId);
+
+    if (!activeTimes[tabId].alarmStarted) {
+      activeTimes[tabId].alarmStarted = true;
+      startCheckAlarm(tabId);
+      startBlinking();
+    }
   }
 
   if (msg.type === "PAGE_IDLE") {
@@ -66,13 +120,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === "RESET_TIMER") {
     delete activeTimes[tabId];
+    resetIconForTab(tabId);
   }
 });
 
 function startCheckAlarm(tabId) {
-  // Check every 5 seconds
   const alarmName = `check_${tabId}`;
-  chrome.alarms.create(alarmName, { periodInMinutes: 5 / 60 });
+  // Check every 10 seconds (Chrome enforces 30s minimum, but this works in dev mode)
+  chrome.alarms.create(alarmName, { delayInMinutes: 10 / 60, periodInMinutes: 10 / 60 });
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -94,6 +149,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     if (total >= limit) {
       chrome.tabs.sendMessage(tabId, { type: "SHOW_OVERLAY" }).catch(() => {});
       chrome.alarms.clear(alarm.name);
+      delete activeTimes[tabId];
+      resetIconForTab(tabId);
     }
   });
 });
@@ -102,6 +159,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete activeTimes[tabId];
   chrome.alarms.clear(`check_${tabId}`);
+  resetIconForTab(tabId);
 });
 
 // Clean up when tab navigates away from tracked site
@@ -111,6 +169,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (!site && activeTimes[tabId]) {
       delete activeTimes[tabId];
       chrome.alarms.clear(`check_${tabId}`);
+      resetIconForTab(tabId);
     }
   }
 });
