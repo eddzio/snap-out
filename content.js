@@ -3,8 +3,70 @@ let idleTimeout = null;
 let isIdle = true;
 const IDLE_DELAY_MS = 15000; // 15 seconds of no interaction = idle
 
-// Keep a persistent port to the background so the service worker stays alive for icon blinking
-const keepAlivePort = chrome.runtime.connect({ name: "keepalive" });
+// Floating timer
+let timerEl = null;
+let timerStyleEl = null;
+let timerInterval = null;
+let activeSeconds = 0;
+
+function createTimer() {
+  if (timerEl) return;
+
+  timerStyleEl = document.createElement("style");
+  timerStyleEl.textContent = `
+    #snap-out-timer {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 2147483646;
+      background: #292524;
+      color: #f5f5f4;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #f5f5f4;
+      opacity: 0.85;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+  `;
+  document.documentElement.appendChild(timerStyleEl);
+
+  timerEl = document.createElement("div");
+  timerEl.id = "snap-out-timer";
+  timerEl.textContent = "0:00";
+  document.documentElement.appendChild(timerEl);
+
+  timerInterval = setInterval(() => {
+    if (!isIdle) {
+      activeSeconds++;
+      const mins = Math.floor(activeSeconds / 60);
+      const secs = activeSeconds % 60;
+      timerEl.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+    }
+  }, 1000);
+}
+
+function removeTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  if (timerEl) {
+    timerEl.remove();
+    timerEl = null;
+  }
+  if (timerStyleEl) {
+    timerStyleEl.remove();
+    timerStyleEl = null;
+  }
+  activeSeconds = 0;
+}
+
+// Start the floating timer immediately
+createTimer();
 
 // Notify background that page is active (only on idle → active transition)
 function notifyActive() {
@@ -56,6 +118,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 function showOverlay() {
   overlayInjected = true;
+  removeTimer();
 
   chrome.runtime.sendMessage({ type: "GET_CONFIG" }, (config) => {
     if (chrome.runtime.lastError || !config) return;
@@ -99,6 +162,7 @@ function showOverlay() {
       style.remove();
       overlayInjected = false;
       chrome.runtime.sendMessage({ type: "RESET_TIMER" });
+      createTimer();
     });
 
     panel.appendChild(title);
